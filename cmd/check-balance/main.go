@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/big"
 
 	"github.com/Insulince/jeth/pkg/convert"
 	"github.com/Insulince/jeth/pkg/eth"
@@ -12,10 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
-)
-
-var (
-	latestBlock *big.Int = nil
 )
 
 func main() {
@@ -36,7 +31,7 @@ func main() {
 	}
 
 	account := common.HexToAddress(address)
-	balance, err := client.BalanceAt(ctx, account, latestBlock)
+	balance, err := client.BalanceAt(ctx, account, eth.LatestBlock)
 	if err != nil {
 		panic(errors.Wrap(err, "fetching account balance"))
 	}

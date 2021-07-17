@@ -1,7 +1,15 @@
 package eth
 
+import (
+	"math/big"
+)
+
 const (
 	DefaultGateway = "https://cloudflare-eth.com"
+)
+
+var (
+	LatestBlock *big.Int = nil
 )
 
 func ObfuscateKey(key string) string {
