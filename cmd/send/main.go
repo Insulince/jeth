@@ -9,20 +9,21 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/Insulince/jeth/pkg/eth"
-	"github.com/Insulince/jeth/pkg/price"
+	"github.com/pkg/errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/pkg/errors"
-
-	"github.com/Insulince/jlib/pkg/io"
 
 	"github.com/Insulince/jeth/pkg/convert"
+	"github.com/Insulince/jeth/pkg/eth"
+	"github.com/Insulince/jeth/pkg/price"
+
+	jio "github.com/Insulince/jlib/pkg/io"
 )
 
 const (
@@ -58,14 +59,14 @@ func getConfig() (cfg Config, err error) {
 	flag.Parse()
 
 	if cfg.privateKeyHex == "" {
-		cfg.privateKeyHex = io.MustPrivateInputWithPrompt("sender's private key not given via \"-private-key\" flag, enter manually instead: ")
-		io.SilentOutputln("")
+		cfg.privateKeyHex = jio.MustPrivateInputWithPrompt("sender's private key not given via \"-private-key\" flag, enter manually instead: ")
+		jio.SilentOutputln("")
 	}
 	if len(cfg.privateKeyHex) != 64 {
 		return Config{}, errors.New("must provide a 64 character hexadecimal private key via \"-private-key\" or at runtime via stdin")
 	}
 	if cfg.receiverWalletAddress == "" {
-		cfg.receiverWalletAddress = io.MustInputWithPrompt("receiver's wallet address not given via \"-receiver-address\" flag, enter manually instead: ")
+		cfg.receiverWalletAddress = jio.MustInputWithPrompt("receiver's wallet address not given via \"-receiver-address\" flag, enter manually instead: ")
 	}
 	if len(cfg.receiverWalletAddress) != 42 {
 		return Config{}, errors.New("must provide a 42 character hexadecimal wallet address starting with \"0x\" for receiver via \"-receiver-address\" or at runtime via stdin")
@@ -74,7 +75,7 @@ func getConfig() (cfg Config, err error) {
 		return Config{}, fmt.Errorf("must provide a non-blank ethereum gateway via \"-gateway\", or leave blank to use the default gateway, %s", eth.DefaultGateway)
 	}
 	if cfg.amount == 0 {
-		amountStr := io.MustInputWithPrompt("sender's ether amount to send not given via \"-amount\" flag, enter manually instead: ")
+		amountStr := jio.MustInputWithPrompt("sender's ether amount to send not given via \"-amount\" flag, enter manually instead: ")
 		cfg.amount, err = strconv.ParseFloat(amountStr, 64)
 		if err != nil {
 			return Config{}, errors.Wrap(err, "stdin provided eth amount is not a float64 value")
@@ -89,12 +90,15 @@ func getConfig() (cfg Config, err error) {
 	if cfg.gasLimit <= 0 {
 		return Config{}, fmt.Errorf("must provide a non-negative non-zero gas limit via \"gas-limit\", or leave blank to use the default of %v", defaultGasLimit)
 	}
-	io.Outputf("configuration parsed successfully (private key obfuscated):\n\t-private-key=%s\n\t-receiver-address=%s\n\t-amount=%v\n\t-gas-price=%v\n\t-gas-limit=%v\n\t-gateway=%s\n\t-dry-run=%v\n\t-help=%v\n", eth.ObfuscateKey(cfg.privateKeyHex), cfg.receiverWalletAddress, cfg.amount, cfg.gasPrice, cfg.gasLimit, cfg.gateway, cfg.dryRun, cfg.help)
+	jio.Outputf("configuration parsed successfully (private key obfuscated):\n\t-private-key=%s\n\t-receiver-address=%s\n\t-amount=%v\n\t-gas-price=%v\n\t-gas-limit=%v\n\t-gateway=%s\n\t-dry-run=%v\n\t-help=%v\n", eth.ObfuscateKey(cfg.privateKeyHex), cfg.receiverWalletAddress, cfg.amount, cfg.gasPrice, cfg.gasLimit, cfg.gateway, cfg.dryRun, cfg.help)
 
 	return cfg, nil
 }
 
 func main() {
+	jio.Outputf("send initiated at %v\n", time.Now().Format(time.RFC3339Nano))
+	defer func() { jio.Outputf("send completed at %v\n", time.Now().Format(time.RFC3339Nano)) }()
+
 	ctx := context.Background()
 
 	cfg, err := getConfig()
@@ -106,19 +110,19 @@ func main() {
 	if err != nil {
 		panic(errors.Wrap(err, "fetching latest eth price"))
 	}
-	io.Outputf("current usd per ether (this figure will be used in later approximations): $%v\n", usdPerEth)
+	jio.Outputf("current usd per ether (this figure will be used in later approximations): $%v\n", usdPerEth)
 
 	client, err := ethclient.Dial(cfg.gateway)
 	if err != nil {
 		panic(errors.Wrap(err, "dialing eth gateway"))
 	}
-	io.Outputf("connected to gateway: %s\n", cfg.gateway)
+	jio.Outputf("connected to gateway: %s\n", cfg.gateway)
 
 	privateKey, err := crypto.HexToECDSA(cfg.privateKeyHex)
 	if err != nil {
 		panic(errors.Wrap(err, "converting private key hex to ecdsa"))
 	}
-	io.Outputf("converted private key to ECDSA: [PRIVATE] %s\n", eth.ObfuscateKey(cfg.privateKeyHex))
+	jio.Outputf("converted private key to ECDSA: [PRIVATE] %s\n", eth.ObfuscateKey(cfg.privateKeyHex))
 
 	publicKey := privateKey.Public()
 	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
@@ -126,91 +130,100 @@ func main() {
 		panic(errors.Wrap(err, "casting public key to ecdsa"))
 	}
 	publicKeyString := hexutil.Encode(crypto.FromECDSAPub(publicKeyECDSA))[4:]
-	io.Outputf("sender's public key extracted from given private key: [PUBLIC] %s\n", publicKeyString)
+	jio.Outputf("sender's public key extracted from given private key: [PUBLIC] %s\n", publicKeyString)
 
 	senderAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
 	senderWalletAddress := senderAddress.String()
-	io.Outputf("sender's wallet address extracted from public key: [WALLET] %s\n", senderWalletAddress)
+	jio.Outputf("sender's wallet address extracted from public key: [WALLET] %s\n", senderWalletAddress)
 
 	nonce, err := client.PendingNonceAt(ctx, senderAddress)
 	if err != nil {
 		panic(errors.Wrapf(err, "fetching latest pending nonce for sender's wallet \"%s\"", senderWalletAddress))
 	}
-	io.Outputf("sender's nonce extracted from wallet address: [NONCE] %v\n", nonce)
+	jio.Outputf("sender's nonce extracted from wallet address: [NONCE] %v\n", nonce)
 
 	bAmount := big.NewFloat(cfg.amount)
-	io.Outputf("ether to be sent: %v ether ($%.2f)\n", cfg.amount, convert.F(convert.EthToUsd(bAmount, usdPerEth)))
+	jio.Outputf("ether to be sent: %v ether ($%.2f)\n", cfg.amount, convert.F(convert.EthToUsd(bAmount, usdPerEth)))
 	bWei := convert.EthToWeiI(bAmount)
-	io.Outputf("equivalent wei to be sent: %s wei ($%.2f)\n", bWei.String(), convert.F(convert.WeiIToUsd(bWei, usdPerEth)))
+	jio.Outputf("equivalent wei to be sent: %s wei ($%.2f)\n", bWei.String(), convert.F(convert.WeiIToUsd(bWei, usdPerEth)))
 
 	bGasPrice := big.NewInt(cfg.gasPrice)
 	if cfg.gasPrice == defaultSuggestedGasPrice {
-		io.Outputln("fetching suggested gas price...")
+		jio.Outputln("fetching suggested gas price...")
 		if bGasPrice, err = client.SuggestGasPrice(ctx); err != nil {
 			panic(errors.Wrap(err, "getting suggested gas price"))
 		}
-		io.Outputf("suggested gas price: %s wei ($%f)\n", bGasPrice.String(), convert.F(convert.WeiIToUsd(bGasPrice, usdPerEth)))
+		jio.Outputf("suggested gas price: %s wei ($%f)\n", bGasPrice.String(), convert.F(convert.WeiIToUsd(bGasPrice, usdPerEth)))
 	}
-	io.Outputf("using gas price: %s wei ($%f)\n", bGasPrice.String(), convert.F(convert.WeiIToUsd(bGasPrice, usdPerEth)))
+	jio.Outputf("using gas price: %s wei ($%f)\n", bGasPrice.String(), convert.F(convert.WeiIToUsd(bGasPrice, usdPerEth)))
 
 	bGasLimit := big.NewInt(int64(cfg.gasLimit))
-	io.Outputf("using gas limit (no unit): %s\n", bGasLimit.String())
+	jio.Outputf("using gas limit (no unit): %s\n", bGasLimit.String())
 
 	bTotalGas := new(big.Int).Mul(bGasPrice, bGasLimit)
-	io.Outputf("total gas for this transaction: %s wei ($%.2f)\n", bTotalGas.String(), convert.F(convert.WeiIToUsd(bTotalGas, usdPerEth)))
+	jio.Outputf("total gas for this transaction: %s wei ($%.2f)\n", bTotalGas.String(), convert.F(convert.WeiIToUsd(bTotalGas, usdPerEth)))
 
 	gasProportion := float64(convert.I(bTotalGas)) / convert.F(convert.EthToWei(big.NewFloat(cfg.amount)))
-	io.Outputf("gas prices make up %.3f%% of the original value to be sent, the receiver's final amount will be short by this same percentage compared to what you originally opted to send\n", gasProportion*100)
+	jio.Outputf("gas prices make up %.3f%% of the original value to be sent, the receiver's final amount will be short by this same percentage compared to what you originally opted to send\n", gasProportion*100)
 
 	bWeiMinusGas := new(big.Int).Sub(bWei, bTotalGas)
-	io.Outputf("total wei to be sent excluding gas costs: %v wei ($%.2f)\n", bWeiMinusGas.String(), convert.F(convert.WeiIToUsd(bWeiMinusGas, usdPerEth)))
+	jio.Outputf("total wei to be sent excluding gas costs: %v wei ($%.2f)\n", bWeiMinusGas.String(), convert.F(convert.WeiIToUsd(bWeiMinusGas, usdPerEth)))
 	bEthMinusGas := convert.WeiIToEth(bWeiMinusGas)
-	io.Outputf("equivalent total ether the be sent excluding gas costs (this is the actual value the receiver will get): %v eth ($%.2f)\n", bEthMinusGas.String(), convert.F(convert.EthToUsd(bEthMinusGas, usdPerEth)))
+	jio.Outputf("equivalent total ether to be sent excluding gas costs (this is the actual value the receiver will get): %v eth ($%.2f)\n", bEthMinusGas.String(), convert.F(convert.EthToUsd(bEthMinusGas, usdPerEth)))
 
 	toAddress := common.HexToAddress(cfg.receiverWalletAddress)
-	io.Outputf("will send to wallet address: %s\n", toAddress)
+	jio.Outputf("will send to wallet address: %s\n", toAddress)
 
-	tx := types.NewTransaction(nonce, toAddress, bWeiMinusGas, cfg.gasLimit, bGasPrice, nil)
-	io.Outputln("transaction built successfully")
+	jio.Outputln("building transaction...")
+	legacyTx := types.LegacyTx{
+		Nonce:    nonce,
+		To:       &toAddress,
+		Value:    bWeiMinusGas,
+		Gas:      cfg.gasLimit,
+		GasPrice: bGasPrice,
+		Data:     nil,
+	}
+	tx := types.NewTx(&legacyTx)
+	jio.Outputln("transaction built successfully")
 
 	chainId, err := client.NetworkID(ctx)
 	if err != nil {
 		panic(errors.Wrap(err, "getting chain id"))
 	}
-	io.Outputf("retrieved chain id from gateway: %s\n", chainId)
+	jio.Outputf("retrieved chain id from gateway: %s\n", chainId)
 
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainId), privateKey)
 	if err != nil {
 		panic(errors.Wrap(err, "signing transaction"))
 	}
-	io.Outputln("transaction signed successfully")
+	jio.Outputln("transaction signed successfully")
 
 	signedTxJsonBytes, err := signedTx.MarshalJSON()
 	if err != nil {
 		panic(errors.Wrap(err, "marshalling signed transaction into json"))
 	}
 	signedTxJson := string(signedTxJsonBytes)
-	io.SilentOutputln("")
-	io.Outputln("signed transaction json:")
-	io.SilentOutputln(signedTxJson)
-	io.SilentOutputln("")
+	jio.SilentOutputln("")
+	jio.Outputln("signed transaction json:")
+	jio.SilentOutputln(signedTxJson)
+	jio.SilentOutputln("")
 	summary := summarize(bAmount, bEthMinusGas, bGasPrice, bGasLimit, bTotalGas, senderWalletAddress, cfg.receiverWalletAddress, gasProportion, usdPerEth)
-	io.Outputln("----- SUMMARY -----")
-	io.SilentOutputln(summary)
+	jio.Outputln("----- SUMMARY -----")
+	jio.SilentOutputln(summary)
 
-	response := io.MustInputWithPrompt("WARNING: you are about to send the above transaction to the ethereum network, please double check the transaction payload and summary above for accuracy, this cannot be undone if successful. PROCEED? [y/N]: ")
+	response := jio.MustInputWithPrompt("WARNING: you are about to send the above transaction to the ethereum network, please double check the transaction payload and summary above for accuracy, this cannot be undone if successful. PROCEED? [y/N]: ")
 	response = strings.ToLower(response)
 	if response != "y" && response != "yes" {
-		io.Output("aborting...")
+		jio.Output("aborting...")
 		os.Exit(0)
 	}
-	io.Outputln("proceeding...")
+	jio.Outputln("proceeding...")
 
 	err = client.SendTransaction(ctx, signedTx)
 	if err != nil {
 		panic(errors.Wrap(err, "sending transaction"))
 	}
-	io.Outputf("\nsuccess: transaction hash: [TRANSACTION] %s", signedTx.Hash().Hex())
+	jio.Outputf("success: transaction hash: [TRANSACTION] %s\n", signedTx.Hash().Hex())
 }
 
 func summarize(bAmount, bEthMinusGas *big.Float, bGasPrice, bGasLimit, bTotalGas *big.Int, senderWalletAddress, receiverWalletAddress string, gasProportion, usdPerEth float64) string {
