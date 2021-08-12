@@ -174,6 +174,19 @@ func main() {
 	toAddress := common.HexToAddress(cfg.receiverWalletAddress)
 	jio.Outputf("will send to wallet address: %s\n", toAddress)
 
+	jio.SilentOutputln("")
+	summary := summarize(bAmount, bEthMinusGas, bGasPrice, bGasLimit, bTotalGas, senderWalletAddress, cfg.receiverWalletAddress, gasProportion, usdPerEth)
+	jio.Outputln("----- SUMMARY -----")
+	jio.SilentOutputln(summary)
+
+	response := jio.MustInputWithPrompt("WARNING: you are about to send the above transaction to the ethereum network, please double check the summary above for accuracy, this cannot be undone if successful. PROCEED? [y/N]: ")
+	response = strings.ToLower(response)
+	if response != "y" && response != "yes" {
+		jio.Output("aborting...")
+		os.Exit(0)
+	}
+	jio.Outputln("proceeding...")
+
 	jio.Outputln("building transaction...")
 	legacyTx := types.LegacyTx{
 		Nonce:    nonce,
@@ -207,17 +220,6 @@ func main() {
 	jio.Outputln("signed transaction json:")
 	jio.SilentOutputln(signedTxJson)
 	jio.SilentOutputln("")
-	summary := summarize(bAmount, bEthMinusGas, bGasPrice, bGasLimit, bTotalGas, senderWalletAddress, cfg.receiverWalletAddress, gasProportion, usdPerEth)
-	jio.Outputln("----- SUMMARY -----")
-	jio.SilentOutputln(summary)
-
-	response := jio.MustInputWithPrompt("WARNING: you are about to send the above transaction to the ethereum network, please double check the transaction payload and summary above for accuracy, this cannot be undone if successful. PROCEED? [y/N]: ")
-	response = strings.ToLower(response)
-	if response != "y" && response != "yes" {
-		jio.Output("aborting...")
-		os.Exit(0)
-	}
-	jio.Outputln("proceeding...")
 
 	err = client.SendTransaction(ctx, signedTx)
 	if err != nil {

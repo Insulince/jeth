@@ -39,6 +39,6 @@ func main() {
 	eth := convert.WeiIToEth(balance)
 	fmt.Println(balance)
 	fmt.Println(eth.String())
-	usd := convert.EthToUsd(eth, 1536.31)
+	usd := convert.EthToUsd(eth, 3195)
 	fmt.Println(usd.String())
 }

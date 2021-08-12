@@ -1,4 +1,5 @@
 .idea/
 vendor/
-bin/
+**/bin/*
+!**/bin/.gitkeep
 *.iml
